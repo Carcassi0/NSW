@@ -33,17 +33,30 @@ int main(int argc, char *argv[]){
     retval = bind(sock, (struct sockaddr *)&serveraddr, sizeof(serveraddr));
     if (retval < 0) err_quit("bind()");
 
-    // 통신에 사용할 변수
+    // Variable
     struct sockaddr_in clientaddr;
     socklen_t addrlen;
     char buf[BUFSIZE + 1];
 
     while(1){
-        addrlen = sizeof(clientaddr); // 메모리 할당
+        // Receive Data
+        addrlen = sizeof(clientaddr);
         retval = recvfrom(sock, buf, BUFSIZE, 0, (struct sockaddr *)&clientaddr, &addrlen);
 
+        // Error Handler
         if (retval < 0) {
             perror("recvfrom()");
+            continue;
+        }
+
+        // Print received data
+        buf[retval] = '\0'; // 종료 문자 추가
+        printf("[UDP/%s:%d] %s\n", inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port), buf);
+
+        // Echo
+        retval = sendto(sock, buf, retval, 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
+        if (retval < 0) {
+            perror("sendto()");
             continue;
         }
         

@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h> // uint16_t 사용
 #include <unistd.h>      // for close()
 #include <arpa/inet.h>   // for inet_addr() and htons()
 #include <sys/socket.h>  // for socket functions
@@ -18,6 +19,7 @@ void err_quit(const char *msg) {
 int main(int argc, char *argv[]){
 
     int retval;
+    
 
     // Socket initialize
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
@@ -35,32 +37,33 @@ int main(int argc, char *argv[]){
     // Variable
     struct sockaddr_in peeraddr;
     socklen_t addrlen;
+    char commandBuf[6];
     char buf[BUFSIZE + 1];
     int len;
-    int command;
+    uint16_t command; 
 
     while(1){
         // Command set
         printf("\n[enter command] ");
-        if (fgets(buf, BUFSIZE + 1, stdin) == NULL)
+        if (fgets(commandBuf, BUFSIZE + 1, stdin) == NULL)
             break;
 
         // '\n' 문자 제거
-        len = strlen(buf);
-        if (buf[len - 1] == '\n')
-            buf[len - 1] = '\0';
-        if (strlen(buf) == 0)
+        len = strlen(commandBuf);
+        if (commandBuf[len - 1] == '\n')
+            commandBuf[len - 1] = '\0';
+        if (strlen(commandBuf) == 0)
             break;
 
         // Command Generator
-        if (strcmp(buf, "echo") == 0) {
-            command = 0x01;
-        } else if (strcmp(buf, "chat") == 0) {
-            command = 0x02;
-        } else if (strcmp(buf, "stat") == 0) {
-            command = 0x03;
-        } else if (strcmp(buf, "quit") == 0) {
-            command = 0x04;
+        if (strcmp(commandBuf, "echo") == 0) {
+            command = htons(0x01);
+        } else if (strcmp(commandBuf, "chat") == 0) {
+            command = htons(0x02);
+        } else if (strcmp(commandBuf, "stat") == 0) {
+            command = htons(0x03);
+        } else if (strcmp(commandBuf, "quit") == 0) {
+            command = htons(0x04);
         } else {
             printf("Unknown command\n");
             continue;  // 유효하지 않은 명령일 때 루프 다시 시작
@@ -70,8 +73,25 @@ int main(int argc, char *argv[]){
         if (fgets(buf, BUFSIZE + 1, stdin) == NULL)
             break;
         
+        len = strlen(buf);
+        if (buf[len - 1] == '\n')
+            buf[len - 1] = '\0';
+        if (strlen(buf) == 0)
+            break;
         
-        retval = sendto(sock, command+buf, strlen(command+buf), 0,
+        
+        retval = sendto(sock, &command, sizeof(command), 0, 
+                    (struct sockaddr *)&serveraddr, sizeof(serveraddr));
+        
+        // 에러 확인
+        if (retval < 0) {
+            perror("sendto()");
+            continue;
+        }
+        // 전송 확인
+        printf("[UDP Client] sent %dbyte.\n", retval);
+
+        retval = sendto(sock, buf, strlen(buf), 0,
                         (struct sockaddr *)&serveraddr, sizeof(serveraddr));
 
         // 에러 확인
@@ -79,10 +99,8 @@ int main(int argc, char *argv[]){
             perror("sendto()");
             continue;
         }
-        
         // 전송 확인
         printf("[UDP Client] sent %dbyte.\n", retval);
-        printf("[UDP Client] sent: %d.\n", command);
 
         if (memcmp(&peeraddr, &serveraddr, sizeof(peeraddr))) {
             printf("[error] Wrong receiver!\n");
