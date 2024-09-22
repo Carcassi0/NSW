@@ -37,6 +37,7 @@ int main(int argc, char *argv[]){
     struct sockaddr_in clientaddr;
     socklen_t addrlen;
     char buf[BUFSIZE + 1];
+    uint16_t command;
 
     while(1){
         // Receive Data
@@ -48,17 +49,39 @@ int main(int argc, char *argv[]){
             perror("recvfrom()");
             continue;
         }
-
-        // Print received data
-        buf[retval] = '\0'; // 종료 문자 추가
-        printf("[UDP/%s:%d] %s\n", inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port), buf);
-
-        // Echo
-        retval = sendto(sock, buf, retval, 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
-        if (retval < 0) {
-            perror("sendto()");
+         // 커맨드와 메시지를 분리
+        if(retval < sizeof(uint16_t)){
+            printf("[UDP/%s:%d] 받은 데이터가 너무 짧습니다.\n",
+                   inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
             continue;
         }
+
+        // 커맨드 추출
+        memcpy(&command, buf, sizeof(uint16_t));
+        command = ntohs(command);
+
+        // 메시지 추출
+        char message[BUFSIZE - sizeof(uint16_t) + 1];
+        memcpy(message, buf + sizeof(uint16_t), retval - sizeof(uint16_t));
+        message[retval - sizeof(uint16_t)] = '\0'; // 널 종료 문자 추가해야됨
+
+        // 커맨드와 메시지 출력
+        printf("[UDP/%s:%d] Command: 0x%04x, Message: %s\n",
+               inet_ntoa(clientaddr.sin_addr),
+               ntohs(clientaddr.sin_port),
+               command,
+               message);
+
+        // // Print received data
+        // buf[retval] = '\0'; // 종료 문자 추가
+        // printf("[UDP/%s:%d] %s\n", inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port), buf);
+
+        // // Echo
+        // retval = sendto(sock, buf, retval, 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
+        // if (retval < 0) {
+        //     perror("sendto()");
+        //     continue;
+        // }
         
     }
 }
