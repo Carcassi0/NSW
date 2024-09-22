@@ -62,3 +62,8 @@ int main(int argc, char *argv[]){
         
     }
 }
+
+// Test
+// gcc -o server UDPServer.c
+// ./server
+

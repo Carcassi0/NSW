@@ -78,6 +78,10 @@ int main(int argc, char *argv[]){
             buf[len - 1] = '\0';
         if (strlen(buf) == 0)
             break;
+        // 새로운 문자열 만들어서 (전송 방식 + 메시지) 형태로 저장 후 전송
+        
+        printf("Sending command: 0x%04x\n", ntohs(command));  // command 출력
+        printf("Sending message: %s\n", buf); 
         
         
         retval = sendto(sock, &command, sizeof(command), 0, 
@@ -122,3 +126,7 @@ int main(int argc, char *argv[]){
 
     return 0;
 }
+
+// Test
+// gcc -o client UDPClient.c
+// ./client
