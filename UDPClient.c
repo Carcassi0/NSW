@@ -39,6 +39,7 @@ int main(int argc, char *argv[]){
     socklen_t addrlen;
     char commandBuf[6];
     char buf[BUFSIZE + 1];
+    char sendBuf[BUFSIZE + 1 + sizeof(uint16_t)];
     int len;
     uint16_t command; 
 
@@ -78,25 +79,21 @@ int main(int argc, char *argv[]){
             buf[len - 1] = '\0';
         if (strlen(buf) == 0)
             break;
-        // 새로운 문자열 만들어서 (전송 방식 + 메시지) 형태로 저장 후 전송
-        
-        printf("Sending command: 0x%04x\n", ntohs(command));  // command 출력
-        printf("Sending message: %s\n", buf); 
         
         
-        retval = sendto(sock, &command, sizeof(command), 0, 
-                    (struct sockaddr *)&serveraddr, sizeof(serveraddr));
+        // 새로운 버퍼에 command와 message 결합
+        memcpy(sendBuf, &command, sizeof(command));  // 버퍼에 명령어 추가
+        memcpy(sendBuf + sizeof(command), buf, strlen(buf) + 1);  // 버퍼에 메시지 추가 (+1은 NULL 문자 포함)
+
+        // 전송
+        retval = sendto(sock, sendBuf, sizeof(command) + strlen(buf) + 1, 0,
+                        (struct sockaddr *)&serveraddr, sizeof(serveraddr));
         
         // 에러 확인
         if (retval < 0) {
             perror("sendto()");
             continue;
         }
-        // 전송 확인
-        printf("[UDP Client] sent %dbyte.\n", retval);
-
-        retval = sendto(sock, buf, strlen(buf), 0,
-                        (struct sockaddr *)&serveraddr, sizeof(serveraddr));
 
         // 에러 확인
         if (retval < 0) {
@@ -116,7 +113,6 @@ int main(int argc, char *argv[]){
         printf("[UDP Client] Received %dbyte.\n", retval);
         printf("[Received message] %s\n", buf);
         
-        // 메시지 전송시 buf 앞에 command 붙여서 전송
     }
     // Protocol
     // echo(0x01), chat(0x02), stat(0x03), quit(0x04)
