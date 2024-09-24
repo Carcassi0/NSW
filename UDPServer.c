@@ -71,6 +71,36 @@ int main(int argc, char *argv[]){
                ntohs(clientaddr.sin_port),
                command,
                message);
+        // 커멘드에 따른 서버 응답       
+        if(command == 0x01){
+            retval = sendto(sock, message, strlen(message)+1, 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
+            printf("[Server] Sent");
+            if (retval < 0) {
+            perror("sendto()");
+            continue;
+        }
+        }
+        if(command == 0x02){
+            retval = sendto(sock, message, strlen(message)+1, 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
+            if (retval < 0) {
+            perror("sendto()");
+            continue;
+        }
+        }
+        if(command == 0x03){
+            retval = sendto(sock, message, strlen(message)+1, 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
+            if (retval < 0) {
+            perror("sendto()");
+            continue;
+        }
+        }
+        if(command == 0x04){
+            retval = sendto(sock, message, strlen(message)+1, 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
+            if (retval < 0) {
+            perror("sendto()");
+            continue;
+        }
+        }
 
         // // Print received data
         // buf[retval] = '\0'; // 종료 문자 추가
@@ -90,3 +120,4 @@ int main(int argc, char *argv[]){
 // gcc -o server UDPServer.c
 // ./server
 
+// 9.24 14:32 현재 서버의 조건문(클라이언트 커멘드 식별)이 작동하지 않음

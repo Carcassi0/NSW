@@ -108,6 +108,9 @@ int main(int argc, char *argv[]){
             continue;
         }
 
+        addrlen = sizeof(serveraddr);
+        retval = recvfrom(sock, buf, BUFSIZE, 0, (struct sockaddr *)&serveraddr, &addrlen);
+
         // 수신된 메시지 출력
         buf[retval] = '\0';
         printf("[UDP Client] Received %dbyte.\n", retval);
