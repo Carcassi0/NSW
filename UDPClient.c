@@ -103,13 +103,17 @@ int main(int argc, char *argv[]){
         // 전송 확인
         printf("[UDP Client] sent %dbyte.\n", retval);
 
-        if (memcmp(&peeraddr, &serveraddr, sizeof(peeraddr))) {
-            printf("[error] Wrong receiver!\n");
-            continue;
-        }
+        
 
-        addrlen = sizeof(serveraddr);
-        retval = recvfrom(sock, buf, BUFSIZE, 0, (struct sockaddr *)&serveraddr, &addrlen);
+        memset(buf, 0, sizeof(buf));
+
+        addrlen = sizeof(peeraddr);
+        retval = recvfrom(sock, buf, BUFSIZE, 0, (struct sockaddr *)&peeraddr, &addrlen);
+
+        // if (memcmp(&peeraddr, &serveraddr, sizeof(peeraddr))) {
+        //     printf("[error] Wrong receiver!\n");
+        //     continue;
+        // }
 
         // 수신된 메시지 출력
         buf[retval] = '\0';

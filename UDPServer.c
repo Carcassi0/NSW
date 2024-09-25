@@ -59,60 +59,49 @@ int main(int argc, char *argv[]){
         // 커맨드 추출
         memcpy(&command, buf, sizeof(uint16_t));
         command = ntohs(command);
+        printf("Received Command: %hu\n", command);  // 제대로 받은 커맨드 출력
 
         // 메시지 추출
         char message[BUFSIZE - sizeof(uint16_t) + 1];
         memcpy(message, buf + sizeof(uint16_t), retval - sizeof(uint16_t));
-        message[retval - sizeof(uint16_t)] = '\0'; // 널 종료 문자 추가해야됨
+        message[retval - sizeof(uint16_t)] = '\0'; // 널 종료 문자 추가
 
         // 커맨드와 메시지 출력
-        printf("[UDP/%s:%d] Command: 0x%04x, Message: %s\n",
+        printf("(%s:%d)가 (%s:%d)로 부터 Command: 0x%04x, Message: %s\n",
+               inet_ntoa(serveraddr.sin_addr),
+               nthos(serveraddr.sin_port),
                inet_ntoa(clientaddr.sin_addr),
                ntohs(clientaddr.sin_port),
                command,
                message);
-        // 커멘드에 따른 서버 응답       
-        if(command == 0x01){
-            retval = sendto(sock, message, strlen(message)+1, 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
-            printf("[Server] Sent");
-            if (retval < 0) {
-            perror("sendto()");
-            continue;
-        }
-        }
-        if(command == 0x02){
-            retval = sendto(sock, message, strlen(message)+1, 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
-            if (retval < 0) {
-            perror("sendto()");
-            continue;
-        }
-        }
-        if(command == 0x03){
-            retval = sendto(sock, message, strlen(message)+1, 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
-            if (retval < 0) {
-            perror("sendto()");
-            continue;
-        }
-        }
-        if(command == 0x04){
-            retval = sendto(sock, message, strlen(message)+1, 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
-            if (retval < 0) {
-            perror("sendto()");
-            continue;
-        }
+
+        // 커멘드에 따른 서버 응답
+        switch(command) {
+            case 1:  // Echo 
+                printf("[Server] Command 1 (Echo) Detected\n");
+                retval = sendto(sock, message, strlen(message) + 1, 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
+                break;
+            case 2: // Chat
+                printf("[Server] Command 2 Detected\n");
+                printf("\n[enter message] ");
+                retval = sendto(sock, message, strlen(message) + 1, 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
+                break;
+            case 3:
+                printf("[Server] Command 3 Detected\n");
+                retval = sendto(sock, message, strlen(message) + 1, 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
+                break;
+            case 4:
+                printf("[Server] Command 4 Detected\n");
+                retval = sendto(sock, message, strlen(message) + 1, 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
+                break;
+            default:
+                printf("[Server] Unknown Command\n");
         }
 
-        // // Print received data
-        // buf[retval] = '\0'; // 종료 문자 추가
-        // printf("[UDP/%s:%d] %s\n", inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port), buf);
-
-        // // Echo
-        // retval = sendto(sock, buf, retval, 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
-        // if (retval < 0) {
-        //     perror("sendto()");
-        //     continue;
-        // }
-        
+        if (retval < 0) {
+            perror("sendto()");
+            continue;
+        }
     }
 }
 
@@ -120,4 +109,8 @@ int main(int argc, char *argv[]){
 // gcc -o server UDPServer.c
 // ./server
 
-// 9.24 14:32 현재 서버의 조건문(클라이언트 커멘드 식별)이 작동하지 않음
+
+// 9.24 14:32 현재 서버의 조건문(클라이언트 커멘드 식별)이 작동하지 않음 => 사용자가 어떻게 보냈는지 확인하기
+// ❯ gcc -o server UDPServer.c
+// ❯ ./server
+// 1[UDP/127.0.0.1:53232] Command: 0x0001, Message: what
