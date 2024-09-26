@@ -38,11 +38,16 @@ int main(int argc, char *argv[]){
     socklen_t addrlen;
     char buf[BUFSIZE + 1];
     uint16_t command;
+    int len;
+    int totalByte = 0;
+    int messageNumber = 0;
 
     while(1){
         // Receive Data
         addrlen = sizeof(clientaddr);
         retval = recvfrom(sock, buf, BUFSIZE, 0, (struct sockaddr *)&clientaddr, &addrlen);
+        totalByte += retval;
+        messageNumber += 1;
 
         // Error Handler
         if (retval < 0) {
@@ -67,35 +72,63 @@ int main(int argc, char *argv[]){
         message[retval - sizeof(uint16_t)] = '\0'; // 널 종료 문자 추가
 
         // 커맨드와 메시지 출력
-        printf("(%s:%d)가 (%s:%d)로 부터 Command: 0x%04x, Message: %s\n",
+        printf("(%s:%d)가 (%s:%d)로 부터 (%d) 바이트 메시지 수신: %s\n",
                inet_ntoa(serveraddr.sin_addr),
-               nthos(serveraddr.sin_port),
+               ntohs(serveraddr.sin_port),
                inet_ntoa(clientaddr.sin_addr),
                ntohs(clientaddr.sin_port),
-               command,
+               retval,
                message);
 
         // 커멘드에 따른 서버 응답
         switch(command) {
-            case 1:  // Echo 
-                printf("[Server] Command 1 (Echo) Detected\n");
+            case 1:  // Echo
                 retval = sendto(sock, message, strlen(message) + 1, 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
                 break;
+
             case 2: // Chat
-                printf("[Server] Command 2 Detected\n");
-                printf("\n[enter message] ");
-                retval = sendto(sock, message, strlen(message) + 1, 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
+                printf("\n[enter message]");
+                if (fgets(buf, BUFSIZE + 1, stdin) == NULL)
                 break;
-            case 3:
-                printf("[Server] Command 3 Detected\n");
-                retval = sendto(sock, message, strlen(message) + 1, 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
+
+                len = strlen(buf);
+                if (buf[len - 1] == '\n')
+                buf[len - 1] = '\0'; // 추후 strcmp와 같이 사용을 위해 종단문자를 추가하여 저장
+                if (strlen(buf) == 0)
                 break;
-            case 4:
-                printf("[Server] Command 4 Detected\n");
-                retval = sendto(sock, message, strlen(message) + 1, 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
+
+                retval = sendto(sock, buf, strlen(buf) + 1, 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
                 break;
-            default:
-                printf("[Server] Unknown Command\n");
+
+            case 3: // Stat
+                if(strcmp(message, "bytes")){
+                    memset(buf, 0, sizeof(buf));
+                    sprintf(buf, "Total Bytes: %dbyte", totalByte);
+                    // memcpy(buf, &totalByte, sizeof(totalByte));
+                    retval = sendto(sock, buf, strlen(buf)+1, 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
+
+                }
+                if(strcmp(message, "number")){
+                    memset(buf, 0, sizeof(buf));
+                    sprintf(buf, "Total Message: %d", messageNumber);
+                    // memcpy(buf, &messageNumber, sizeof(messageNumber));
+                    retval = sendto(sock, buf, strlen(buf)+1, 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
+                }
+                if(strcmp(message, "both")){
+                    memset(buf, 0, sizeof(buf));
+                    sprintf(buf, "Total Message: %d\nTotal Bytes: %dbyte", messageNumber, totalByte);
+                    retval = sendto(sock, buf, strlen(buf)+1, 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
+                }
+
+                break;
+            case 4: // Quit
+                close(sock);
+                printf("Socket Close\n");
+                return 0;
+            default: // 기본 세팅 Stat
+                memset(buf, 0, sizeof(buf));
+                sprintf(buf, "Total Message: %d\nTotal Bytes: %dbyte", messageNumber, totalByte);
+                retval = sendto(sock, buf, strlen(buf)+1, 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
         }
 
         if (retval < 0) {
@@ -110,7 +143,4 @@ int main(int argc, char *argv[]){
 // ./server
 
 
-// 9.24 14:32 현재 서버의 조건문(클라이언트 커멘드 식별)이 작동하지 않음 => 사용자가 어떻게 보냈는지 확인하기
-// ❯ gcc -o server UDPServer.c
-// ❯ ./server
-// 1[UDP/127.0.0.1:53232] Command: 0x0001, Message: what
+// 09.25 23:24 stat 구현 및 form 맞추고 보고서 작성

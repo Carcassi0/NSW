@@ -70,10 +70,19 @@ int main(int argc, char *argv[]){
             continue;  // 유효하지 않은 명령일 때 루프 다시 시작
         }
 
+        if (strcmp(commandBuf, "quit") == 0){
+            memcpy(sendBuf, &command, sizeof(command));
+            retval = sendto(sock, sendBuf, sizeof(command) + strlen(buf) + 1, 0,
+                        (struct sockaddr *)&serveraddr, sizeof(serveraddr));
+            close(sock);
+            return 0;
+        }
+
         printf("\n[enter message] ");
         if (fgets(buf, BUFSIZE + 1, stdin) == NULL)
             break;
-        
+
+        // message 가공
         len = strlen(buf);
         if (buf[len - 1] == '\n')
             buf[len - 1] = '\0';
@@ -88,12 +97,6 @@ int main(int argc, char *argv[]){
         // 전송
         retval = sendto(sock, sendBuf, sizeof(command) + strlen(buf) + 1, 0,
                         (struct sockaddr *)&serveraddr, sizeof(serveraddr));
-        
-        // 에러 확인
-        if (retval < 0) {
-            perror("sendto()");
-            continue;
-        }
 
         // 에러 확인
         if (retval < 0) {
@@ -101,31 +104,24 @@ int main(int argc, char *argv[]){
             continue;
         }
         // 전송 확인
-        printf("[UDP Client] sent %dbyte.\n", retval);
-
-        
-
+        printf("[Test] sent %dbyte.\n", retval);
+    
         memset(buf, 0, sizeof(buf));
 
         addrlen = sizeof(peeraddr);
         retval = recvfrom(sock, buf, BUFSIZE, 0, (struct sockaddr *)&peeraddr, &addrlen);
 
-        // if (memcmp(&peeraddr, &serveraddr, sizeof(peeraddr))) {
-        //     printf("[error] Wrong receiver!\n");
-        //     continue;
-        // }
-
         // 수신된 메시지 출력
         buf[retval] = '\0';
-        printf("[UDP Client] Received %dbyte.\n", retval);
+        printf("[Test] Received %dbyte.\n", retval);
         printf("[Received message] %s\n", buf);
         
     }
-    // Protocol
-    // echo(0x01), chat(0x02), stat(0x03), quit(0x04)
+
 
     // 소켓 종료
     close(sock);
+    printf("Socket Close\n");
 
     return 0;
 }
