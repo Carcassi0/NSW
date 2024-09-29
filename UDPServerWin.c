@@ -1,10 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>      // for close()
-#include <arpa/inet.h>   // for inet_ntoa() and htons()
-#include <sys/socket.h>  // for socket functions
-#include <netinet/in.h>  // for sockaddr_in
+#include <winsock2.h>      // for Winsock functions
+#include <Ws2tcpip.h>      // for inet_ntoa() and htons()
+#pragma comment(lib, "ws2_32.lib")  // Winsock 라이브러리
 
 #define BUFSIZE 512
 
@@ -16,11 +15,16 @@ void err_quit(const char *msg) {
 
 int main(int argc, char *argv[]){
     int retval;
-    int alert;
+
+    // Winsock 초기화
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        err_quit("WSAStartup()");
+    }
 
     // Socket Initialize
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
-    if(sock < 0){
+    if(sock == INVALID_SOCKET){
         err_quit("socket()");
     }
 
@@ -32,12 +36,11 @@ int main(int argc, char *argv[]){
     serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
 
     retval = bind(sock, (struct sockaddr *)&serveraddr, sizeof(serveraddr));
-    if (retval < 0) err_quit("bind()");
+    if (retval == SOCKET_ERROR) err_quit("bind()");
 
     // 변수
     struct sockaddr_in clientaddr;
-    socklen_t addrlen;
-    char alertBuf[BUFSIZE];
+    int addrlen;
     char buf[BUFSIZE + 1];
     uint16_t command;
     int len;
@@ -46,19 +49,17 @@ int main(int argc, char *argv[]){
 
     while(1){
         // 데이터 수신
-        memset(buf, 0, sizeof(buf));
-        memset(alertBuf, 0, sizeof(alertBuf));
-
         addrlen = sizeof(clientaddr);
         retval = recvfrom(sock, buf, BUFSIZE, 0, (struct sockaddr *)&clientaddr, &addrlen);
         totalByte += retval;
         messageNumber += 1;
 
         // 에러 처리
-        if (retval < 0) {
+        if (retval == SOCKET_ERROR) {
             perror("recvfrom()");
             continue;
         }
+
         // 커맨드와 메시지를 분리
         if(retval < sizeof(uint16_t)){
             printf("[UDP/%s:%d] 받은 데이터가 너무 짧습니다.\n",
@@ -75,18 +76,14 @@ int main(int argc, char *argv[]){
         memcpy(message, buf + sizeof(uint16_t), retval - sizeof(uint16_t));
         message[retval - sizeof(uint16_t)] = '\0'; // 널 종료 문자 추가
 
-        // 수신 성공시 클라이언트에게 메시지 전송
-        sprintf(alertBuf, "(%s:%d)가 (%s:%d)로 부터 (%d) 바이트 메시지 수신: %s\n",
+        // 커맨드와 메시지 출력
+        printf("(%s:%d)가 (%s:%d)로 부터 (%d) 바이트 메시지 수신: %s\n",
                inet_ntoa(serveraddr.sin_addr),
                ntohs(serveraddr.sin_port),
                inet_ntoa(clientaddr.sin_addr),
                ntohs(clientaddr.sin_port),
                retval,
                message);
-
-        alert = sendto(sock, alertBuf, strlen(alertBuf), 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
-
-        usleep(100 * 1000);
 
         // 커멘드에 따른 서버 응답
         switch(command) {
@@ -97,56 +94,54 @@ int main(int argc, char *argv[]){
             case 2: // Chat
                 printf("\n[enter message]");
                 if (fgets(buf, BUFSIZE + 1, stdin) == NULL)
-                break;
+                    break;
 
                 len = strlen(buf);
                 if (buf[len - 1] == '\n')
-                buf[len - 1] = '\0'; // 추후 strcmp와 같이 사용을 위해 종단문자를 추가하여 저장
+                    buf[len - 1] = '\0'; // 추후 strcmp와 같이 사용을 위해 종단문자를 추가하여 저장
                 if (strlen(buf) == 0)
-                break;
+                    break;
 
                 retval = sendto(sock, buf, strlen(buf), 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
                 break;
 
             case 3: // Stat
-                if(strcmp(message, "bytes")==0){
+                if(strcmp(message, "bytes") == 0){
+                    memset(buf, 0, sizeof(buf));
                     sprintf(buf, "Total Bytes: %dbyte", totalByte);
                     retval = sendto(sock, buf, strlen(buf), 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
-                    break;
                 }
-                if(strcmp(message, "number")==0){
+                if(strcmp(message, "number") == 0){
+                    memset(buf, 0, sizeof(buf));
                     sprintf(buf, "Total Message: %d", messageNumber);
                     retval = sendto(sock, buf, strlen(buf), 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
-                    break;
                 }
-                if(strcmp(message, "both")==0){
+                if(strcmp(message, "both") == 0){
+                    memset(buf, 0, sizeof(buf));
                     sprintf(buf, "Total Message: %d\nTotal Bytes: %dbyte", messageNumber, totalByte);
                     retval = sendto(sock, buf, strlen(buf), 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
-                    break;
                 }
                 else{
+                    memset(buf, 0, sizeof(buf));
                     sprintf(buf, "Total Message: %d\nTotal Bytes: %dbyte", messageNumber, totalByte);
                     retval = sendto(sock, buf, strlen(buf), 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
-                    break;
                 }
+                break;
             case 4: // Quit
-                close(sock);
+                closesocket(sock);
+                WSACleanup();
                 printf("Socket Close\n");
                 return 0;
+            default: // 기본 세팅 Stat
+                memset(buf, 0, sizeof(buf));
+                sprintf(buf, "Total Message: %d Total Bytes: %dbyte", messageNumber, totalByte);
+                retval = sendto(sock, buf, strlen(buf), 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
         }
 
-        memset(buf, 0, sizeof(buf));
-
-        
         // 에러 처리
-        if (retval < 0) {
+        if (retval == SOCKET_ERROR) {
             perror("sendto()");
             continue;
         }
     }
 }
-
-// Test
-// gcc -o server UDPServer.c
-// ./server
-
