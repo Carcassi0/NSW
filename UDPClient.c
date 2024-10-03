@@ -27,7 +27,7 @@ int main() {
     server_ip[strcspn(server_ip, "\n")] = 0;  // 개행 문자 제거
 
     printf("Enter server port number: ");
-    scanf("%d", &server_port);
+    scanf("%d", &server_port); // server default setting: 9000
 
     // Server port 입력 후 입력 버퍼 클리어
     while (getchar() != '\n'); // 남아있는 모든 문자를 읽어버리면서 버퍼를 클리어
