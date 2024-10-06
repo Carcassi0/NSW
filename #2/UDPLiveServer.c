@@ -8,172 +8,166 @@
 #include <netinet/in.h> // for sockaddr_in
 
 #define BUFSIZE 512
-
-char mainBuf[BUFSIZE];
-char nickNameBuf[BUFSIZE];
-char sendBuf[BUFSIZE];
-struct userData userList[BUFSIZE];
-int userCount = 0;
-int len;
-
-// 통계 변수
-int messageNumber = 0;
-
-struct sockaddr_in clientaddr;
-struct sockaddr_in serveraddr;
-
-// memset(&serveraddr, 0, sizeof(serveraddr));
-// serveraddr.sin_family = AF_INET;
-// serveraddr.sin_port = htons(9000);
-// serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
-
-void *ThreadMain(void *arg); // Main program of a thread
-void err_quit(const char *msg);
-int sameUser(char user);
-void createUser(char user);
+#define MAX_USERS 100
 
 struct ThreadArgs
 {
-  int clientSock; // Socket descriptor for client
+    int clientSock; // Socket descriptor for client
+    struct sockaddr_in clientaddr; // Client address
 };
 
 struct userData
 {
-  int avail;
-  char nickName[20];
-  struct sockaddr_in addr;
+    int avail; // Availability flag
+    char nickName[20]; // User nickname
+    struct sockaddr_in addr; // User address
 };
+
+char mainBuf[BUFSIZE];
+char nickNameBuf[BUFSIZE];
+char sendBuf[BUFSIZE];
+struct userData userList[MAX_USERS];
+int userCount = 0;
+
+// 통계 변수
+int messageNumber = 0;
+
+void *ThreadMain(void *arg); // Main program of a thread
+void *recvMessage(void *arg);
+void err_quit(const char *msg);
+int sameUser(char user[]);
+void createUser(char user[], struct sockaddr_in addr);
 
 int main(int argc, char *argv[])
 {
+    int retval;
+    int listenSock = socket(PF_INET, SOCK_DGRAM, 0);
 
-  int retval;
-  int listenSock = socket(PF_INET, SOCK_DGRAM, 0);
+    if (listenSock < 0)
+    {
+        err_quit("socket()");
+    }
 
-  if (listenSock < 0)
-  {
-    err_quit("socket()");
-  }
+    // Server address initialize and binding
+    struct sockaddr_in serveraddr;
+    memset(&serveraddr, 0, sizeof(serveraddr));
+    serveraddr.sin_family = AF_INET;
+    serveraddr.sin_port = htons(9000);
+    serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
 
-  // Server address initialize and binding
-  struct sockaddr_in serveraddr;
-  memset(&serveraddr, 0, sizeof(serveraddr));
-  serveraddr.sin_family = AF_INET;
-  serveraddr.sin_port = htons(9000);
-  serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    retval = bind(listenSock, (struct sockaddr *)&serveraddr, sizeof(serveraddr));
+    if (retval < 0)
+        err_quit("bind()");
 
-  retval = bind(listenSock, (struct sockaddr *)&serveraddr, sizeof(serveraddr));
-  if (retval < 0)
-    err_quit("bind()");
+    printf("Server is running on port 9000...\n");
 
-  for (;;)
-  {
+    for (;;)
+    {
+        struct ThreadArgs *threadArgs = (struct ThreadArgs *)malloc(sizeof(struct ThreadArgs));
+        socklen_t addrlen = sizeof(threadArgs->clientaddr);
+        threadArgs->clientSock = listenSock;
 
-    struct ThreadArgs *threadArgs = (struct ThreadArgs *)malloc(
-        sizeof(struct ThreadArgs));
+        // 수신 대기 및 클라이언트 주소 저장
+        recvfrom(listenSock, mainBuf, BUFSIZE, 0, (struct sockaddr *)&threadArgs->clientaddr, &addrlen);
 
-    pthread_t mainThread;
-    int mainReturn = pthread_create(&mainThread, NULL, ThreadMain, threadArgs);
-  }
-  return 0;
+        // 새로운 스레드 생성
+        pthread_t mainThread;
+        int mainReturn = pthread_create(&mainThread, NULL, ThreadMain, threadArgs);
+        if (mainReturn != 0)
+        {
+            free(threadArgs);
+            err_quit("pthread_create()");
+        }
+    }
+
+    close(listenSock);
+    return 0;
 }
 
-void *ThreadMain(void *threadArgs)
+void *ThreadMain(void *arg)
 {
-  // Guarantees that thread resources are deallocated upon return
-  pthread_detach(pthread_self());
+    // Guarantees that thread resources are deallocated upon return
+    pthread_detach(pthread_self());
 
-  // Extract socket file descriptor from argument
-  int clientSock = ((struct ThreadArgs *)threadArgs)->clientSock;
+    // Extract socket and client address from argument
+    struct ThreadArgs *threadArgs = (struct ThreadArgs *)arg;
+    int sock = threadArgs->clientSock;
 
-  pthread_t sendThread;
-  pthread_t recvThread; // Create client thread for send
-  int sendReturn = pthread_create(&sendThread, NULL, send, threadArgs);
-  int recvReturn = pthread_create(&recvThread, NULL, recv, threadArgs);
+    // 메시지 수신 스레드 생성
+    recvMessage(threadArgs);
 
-  // free(threadArgs); // Deallocate memory for argument 양 스레드 끝나는 시점에 free 필요, 혹은 양 스레드 내부에서 처리
-
-  return (NULL);
+    // 메모리 해제
+    free(threadArgs);
+    return NULL;
 }
 
-void *send(void *arg)
+void *recvMessage(void *arg)
 {
-  pthread_detach(pthread_self());
+    struct ThreadArgs *threadArgs = (struct ThreadArgs *)arg;
+    struct sockaddr_in clientaddr = threadArgs->clientaddr;
+    int sock = threadArgs->clientSock;
+    int recv;
 
-  int sock = socket(AF_INET, SOCK_DGRAM, 0);
-  if (sock < 0)
-  {
-    err_quit("socket()");
-  }
-
-  while (1)
-  { // broadcast
-    for (int i = 0; sizeof(userList); i++)
+    while (1)
     {
+        socklen_t addrlen = sizeof(clientaddr);
+        recv = recvfrom(sock, mainBuf, BUFSIZE, 0, (struct sockaddr *)&clientaddr, &addrlen);
+        if (recv < 0)
+        {
+            perror("recvfrom()");
+            continue;
+        }
 
+        mainBuf[recv] = '\0';
+        messageNumber += 1;
+
+        // 유저 닉네임 추출 (닉네임 형식: "[nickname] message")
+        sscanf(mainBuf, "[%19[^]]] %s", nickNameBuf, &mainBuf[21]); // 21: 닉네임 + ']' + ' '
+
+        // 신규 유저 생성
+        if (sameUser(nickNameBuf) != 1)
+        {
+            createUser(nickNameBuf, clientaddr);
+        }
+
+        // 유저들에게 메시지 전송
+        for (int i = 0; i < userCount; i++)
+        {
+            if (strcmp(userList[i].nickName, nickNameBuf) != 0) // 발신자에게는 echo하지 않음
+            {
+                sendto(sock, mainBuf, recv, 0, (struct sockaddr *)&userList[i].addr, sizeof(userList[i].addr));
+            }
+        }
     }
-  }
-}
-
-void *recv(void *arg)
-{
-  pthread_detach(pthread_self());
-
-  int recv;
-  int nameLength = 0;
-  int sock = socket(AF_INET, SOCK_DGRAM, 0);
-
-  while (1)
-  {
-
-    int addrlen = sizeof(clientaddr);
-
-    recv = recvfrom(sock, mainBuf, BUFSIZE, 0, (struct sockaddr *)&clientaddr, &addrlen);
-    if (recv >= 0)
-    {
-      messageNumber += 1;
-    }
-    if (recv < 0)
-    {
-      perror("recvfrom()");
-      continue;
-    }
-
-    for (int i = 1; mainBuf[i] == ']'; i++)
-    {
-      nameLength += 1;
-      nickNameBuf[i] = mainBuf[i];
-    }
-    if(sameUser(nickNameBuf)!=1){ // 새로운 유저라면
-      userCount += 1; // 유저 수 하나 늘리고
-      createUser(nickNameBuf); // 유저 DB에 정보 저장(닉네임, IP주소, 포트 번호)
-    }
-
-    char messageBuf[BUFSIZE - nameLength];
-    memcpy(&messageBuf, mainBuf, nameLength + 1);
-  }
 }
 
 void err_quit(const char *msg)
 {
-  perror(msg); // 시스템 오류 메시지 출력
-  exit(-1);    // 프로그램 종료
+    perror(msg); // 시스템 오류 메시지 출력
+    exit(-1);    // 프로그램 종료
 }
 
-int sameUser(char user) // 데이터베이스에 존재하는 유저인지 체크
+int sameUser(char user[])
 {
-  for (int i = 0; sizeof(userList); i++)
-  {
-    if(strcmp(userList[i].nickName, user)==0){
-      return 1;
-    } else {
-      return -1;
+    for (int i = 0; i < userCount; i++)
+    {
+        if (strcmp(userList[i].nickName, user) == 0)
+        {
+            return 1; // 존재하는 유저
+        }
     }
-  }
-}
-void createUser(char user){
-
+    return 0; // 존재하지 않는 유저
 }
 
+void createUser(char user[], struct sockaddr_in addr)
+{
+    if (userCount < MAX_USERS) // 최대 유저 수 확인
+    {
+        userList[userCount].avail = 1; // 유저 사용 가능으로 설정
+        strcpy(userList[userCount].nickName, user); // 유저 닉네임 저장
+        userList[userCount].addr = addr; // 유저 주소 저장
+        userCount++; // 유저 수 증가
+    }
+}
 // gcc -o server UDPLiveServer.c
 // ./server
