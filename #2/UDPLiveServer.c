@@ -10,6 +10,7 @@
 #define BUFSIZE 512
 #define MAX_USERS 100
 
+
 struct ThreadArgs
 {
     int clientSock; // Socket descriptor for client
@@ -124,7 +125,7 @@ void *recvMessage(void *arg)
         // 유저 닉네임 추출 (닉네임 형식: "[nickname] message")
         sscanf(mainBuf, "[%19[^]]] %s", nickNameBuf, &mainBuf[21]); // 21: 닉네임 + ']' + ' '
 
-        // 신규 유저 생성
+        // 만약 신규 유저라면, 신규 유저 생성
         if (sameUser(nickNameBuf) != 1)
         {
             createUser(nickNameBuf, clientaddr);
@@ -171,3 +172,6 @@ void createUser(char user[], struct sockaddr_in addr)
 }
 // gcc -o server UDPLiveServer.c
 // ./server
+
+// 통계 기능을 위한 서버 시작 시, 시간 측정
+// 

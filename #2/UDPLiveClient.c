@@ -238,6 +238,8 @@ int main(int argc, char *argv[]) {
 void *sendMessage(void *arg) {
     struct threadArgs *threadArgs = (struct threadArgs *)arg;
     int sock = threadArgs->clntSock; // 클라이언트 소켓 가져오기
+    
+    printf("If you want menu, send \"menu\"");
 
     while (1) {
         // 메시지 입력
@@ -245,10 +247,21 @@ void *sendMessage(void *arg) {
         if (fgets(buf, BUFSIZE, stdin) == NULL)
             break;
 
+        if(strcmp(buf, "menu")){
+            printf("Menu\n1. info 2. stat 3. quit\n");
+            printf("[select menu]");
+            fgets(buf, BUFSIZE, stdin);
+            buf[strcspn(buf, "\n")] = 0;
+
+            // 클라이언트 메뉴 선택 전송: info, stat, quit
+            int send = sendto(sock, buf, strlen(buf), 0, (struct sockaddr *)&threadArgs->serveraddr, sizeof(threadArgs->serveraddr));
+        }
+
         // 문자열 끝에 있는 개행 문자 제거
         buf[strcspn(buf, "\n")] = 0; 
         if (strlen(buf) == 0)
             break;
+
 
         // 메시지 전송
         sprintf(sendBuf, "[%s] %s", nickName, buf);
