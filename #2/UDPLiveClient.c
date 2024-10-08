@@ -216,6 +216,8 @@ int main(int argc, char *argv[]) {
     scanf("%s", nickName);
     while (getchar() != '\n'); // 입력 버퍼 클리어
 
+    printf("If you want menu, send \"menu\"");
+
     pthread_t sendThread;
     pthread_t recvThread;
 
@@ -239,15 +241,17 @@ void *sendMessage(void *arg) {
     struct threadArgs *threadArgs = (struct threadArgs *)arg;
     int sock = threadArgs->clntSock; // 클라이언트 소켓 가져오기
     
-    printf("If you want menu, send \"menu\"");
 
     while (1) {
         // 메시지 입력
         printf("\n[enter message] ");
+
         if (fgets(buf, BUFSIZE, stdin) == NULL)
             break;
+            
+        buf[strcspn(buf, "\n")] = 0; 
 
-        if(strcmp(buf, "menu")){
+        if(strcmp(buf, "menu")==0){
             printf("Menu\n1. info 2. stat 3. quit\n");
             printf("[select menu]");
             fgets(buf, BUFSIZE, stdin);
@@ -257,8 +261,6 @@ void *sendMessage(void *arg) {
             int send = sendto(sock, buf, strlen(buf), 0, (struct sockaddr *)&threadArgs->serveraddr, sizeof(threadArgs->serveraddr));
         }
 
-        // 문자열 끝에 있는 개행 문자 제거
-        buf[strcspn(buf, "\n")] = 0; 
         if (strlen(buf) == 0)
             break;
 

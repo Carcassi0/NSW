@@ -29,7 +29,8 @@ int main(int argc, char *argv[]){
     memset(&serveraddr, 0, sizeof(serveraddr));
     serveraddr.sin_family = AF_INET;
     serveraddr.sin_port = htons(9000);
-    serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    // serveraddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    serveraddr.sin_addr.s_addr = inet_addr("172.30.1.73");
 
     retval = bind(sock, (struct sockaddr *)&serveraddr, sizeof(serveraddr));
     if (retval < 0) err_quit("bind()");

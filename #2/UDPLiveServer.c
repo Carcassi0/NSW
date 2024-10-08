@@ -6,27 +6,29 @@
 #include <arpa/inet.h>  // for inet_addr() and htons()
 #include <sys/socket.h> // for socket functions
 #include <netinet/in.h> // for sockaddr_in
+#include <time.h>       // for time stat
 
 #define BUFSIZE 512
 #define MAX_USERS 100
 
-
 struct ThreadArgs
 {
-    int clientSock; // Socket descriptor for client
+    int clientSock;                // Socket descriptor for client
     struct sockaddr_in clientaddr; // Client address
 };
 
 struct userData
 {
-    int avail; // Availability flag
-    char nickName[20]; // User nickname
+    int avail;               // Availability flag
+    char nickName[20];       // User nickname
     struct sockaddr_in addr; // User address
 };
 
 char mainBuf[BUFSIZE];
 char nickNameBuf[BUFSIZE];
-char sendBuf[BUFSIZE];
+char commandBuf[5];
+char alertBuf[BUFSIZE];
+int offset = 0; // 문자열 이어 쓰기를 위한 변수
 struct userData userList[MAX_USERS];
 int userCount = 0;
 
@@ -38,11 +40,15 @@ void *recvMessage(void *arg);
 void err_quit(const char *msg);
 int sameUser(char user[]);
 void createUser(char user[], struct sockaddr_in addr);
+clock_t start, end;
+double cpu_time_used;
 
 int main(int argc, char *argv[])
 {
     int retval;
     int listenSock = socket(PF_INET, SOCK_DGRAM, 0);
+
+    start = clock();
 
     if (listenSock < 0)
     {
@@ -125,6 +131,32 @@ void *recvMessage(void *arg)
         // 유저 닉네임 추출 (닉네임 형식: "[nickname] message")
         sscanf(mainBuf, "[%19[^]]] %s", nickNameBuf, &mainBuf[21]); // 21: 닉네임 + ']' + ' '
 
+        // 통계 커맨드 여부를 확인하기 위해 메시지 4글자 추출
+        sscanf(mainBuf, "[%*[^]]] %4s", commandBuf);
+
+        if (strcmp(commandBuf, "info"))
+        {
+            offset += sprintf(alertBuf, "클라이언트 수: %d", userCount);
+            for (int i = 0; i < userCount; i++)
+            {
+                sprintf(alertBuf + offset, "\n[%s] %s: %d",
+                        userList[i].nickName, inet_ntoa(userList[i].addr.sin_addr), userList[i].addr.sin_port);
+            }
+        }
+        if (strcmp(commandBuf, "stat"))
+        { // 분당 평균 메시지 수 제공
+            end = clock();
+            cpu_time_used = messageNumber/(((double)(end - start)) / CLOCKS_PER_SEC * 60); 
+            printf("1분당 평균 메시지 수: %d", (int)cpu_time_used);
+        }
+        if (strcmp(commandBuf, "quit"))
+        { // 종료 커맨드 => 서버 종료
+            sprintf(alertBuf, "\nServer Closed");
+            printf("Server Closed");
+            close(sock);
+            return 0;
+        }
+
         // 만약 신규 유저라면, 신규 유저 생성
         if (sameUser(nickNameBuf) != 1)
         {
@@ -164,14 +196,14 @@ void createUser(char user[], struct sockaddr_in addr)
 {
     if (userCount < MAX_USERS) // 최대 유저 수 확인
     {
-        userList[userCount].avail = 1; // 유저 사용 가능으로 설정
+        userList[userCount].avail = 1;              // 유저 사용 가능으로 설정
         strcpy(userList[userCount].nickName, user); // 유저 닉네임 저장
-        userList[userCount].addr = addr; // 유저 주소 저장
-        userCount++; // 유저 수 증가
+        userList[userCount].addr = addr;            // 유저 주소 저장
+        userCount++;                                // 유저 수 증가
     }
 }
 // gcc -o server UDPLiveServer.c
 // ./server
 
 // 통계 기능을 위한 서버 시작 시, 시간 측정
-// 
+//
