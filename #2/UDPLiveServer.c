@@ -37,6 +37,7 @@ int messageNumber = 0;
 
 void *ThreadMain(void *arg); // Main program of a thread
 void *recvMessage(void *arg);
+// void *statMessage(void *arg);
 void err_quit(const char *msg);
 int sameUser(char user[]);
 void createUser(char user[], struct sockaddr_in addr);
@@ -100,7 +101,16 @@ void *ThreadMain(void *arg)
     struct ThreadArgs *threadArgs = (struct ThreadArgs *)arg;
     int sock = threadArgs->clientSock;
 
-    // 메시지 수신 스레드 생성
+    // 메인 스레드 아래에 릴레이 스레드와 통계 스레드 생성
+    // pthread_t relayThread;
+    // // pthread_t statThread;
+
+    // pthread_create(&relayThread, NULL, recvMessage, threadArgs);
+    // // pthread_create(&statThread, NULL, statMessage, threadArgs);
+
+    // pthread_detach(relayThread);
+    // // pthread_detach(statThread);
+
     recvMessage(threadArgs);
 
     // 메모리 해제
@@ -118,44 +128,24 @@ void *recvMessage(void *arg)
     while (1)
     {
         socklen_t addrlen = sizeof(clientaddr);
+
+        // 버퍼 초기화
+        memset(mainBuf, 0, sizeof(mainBuf));
+        memset(nickNameBuf, 0, sizeof(nickNameBuf));
+        memset(commandBuf, 0, sizeof(commandBuf));
+
         recv = recvfrom(sock, mainBuf, BUFSIZE, 0, (struct sockaddr *)&clientaddr, &addrlen);
-        if (recv < 0)
-        {
-            perror("recvfrom()");
-            continue;
-        }
+        // if (recv < 0)
+        // {
+        //     perror("recvfrom()");
+        //     continue;
+        // }
 
         mainBuf[recv] = '\0';
         messageNumber += 1;
 
         // 유저 닉네임 추출 (닉네임 형식: "[nickname] message")
-        sscanf(mainBuf, "[%19[^]]] %s", nickNameBuf, &mainBuf[21]); // 21: 닉네임 + ']' + ' '
-
-        // 통계 커맨드 여부를 확인하기 위해 메시지 4글자 추출
-        sscanf(mainBuf, "[%*[^]]] %4s", commandBuf);
-
-        if (strcmp(commandBuf, "info"))
-        {
-            offset += sprintf(alertBuf, "클라이언트 수: %d", userCount);
-            for (int i = 0; i < userCount; i++)
-            {
-                sprintf(alertBuf + offset, "\n[%s] %s: %d",
-                        userList[i].nickName, inet_ntoa(userList[i].addr.sin_addr), userList[i].addr.sin_port);
-            }
-        }
-        if (strcmp(commandBuf, "stat"))
-        { // 분당 평균 메시지 수 제공
-            end = clock();
-            cpu_time_used = messageNumber/(((double)(end - start)) / CLOCKS_PER_SEC * 60); 
-            printf("1분당 평균 메시지 수: %d", (int)cpu_time_used);
-        }
-        if (strcmp(commandBuf, "quit"))
-        { // 종료 커맨드 => 서버 종료
-            sprintf(alertBuf, "\nServer Closed");
-            printf("Server Closed");
-            close(sock);
-            return 0;
-        }
+        sscanf(mainBuf, "[%19[^]]] %s", nickNameBuf, commandBuf); // 닉네임 및 명령어 추출
 
         // 만약 신규 유저라면, 신규 유저 생성
         if (sameUser(nickNameBuf) != 1)
@@ -163,12 +153,46 @@ void *recvMessage(void *arg)
             createUser(nickNameBuf, clientaddr);
         }
 
-        // 유저들에게 메시지 전송
-        for (int i = 0; i < userCount; i++)
+        // 명령어 처리
+        if (strcmp(commandBuf, "info") == 0)
         {
-            if (strcmp(userList[i].nickName, nickNameBuf) != 0) // 발신자에게는 echo하지 않음
+            offset += sprintf(alertBuf, "클라이언트 수: %d", userCount);
+
+            for (int i = 0; i < userCount; i++)
             {
-                sendto(sock, mainBuf, recv, 0, (struct sockaddr *)&userList[i].addr, sizeof(userList[i].addr));
+                offset += sprintf(alertBuf + offset, "\n[%s] %s: %d",
+                        userList[i].nickName, inet_ntoa(userList[i].addr.sin_addr), ntohs(userList[i].addr.sin_port));
+            }
+            sendto(sock, alertBuf, strlen(alertBuf), 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
+            memset(alertBuf, 0, sizeof(alertBuf));
+        }
+        else if (strcmp(commandBuf, "stat") == 0)
+        {
+            end = clock();
+            cpu_time_used = messageNumber / (((double)(end - start)) / CLOCKS_PER_SEC * 60);
+            sprintf(alertBuf, "1분당 평균 메시지 수: %f", cpu_time_used);
+            sendto(sock, alertBuf, strlen(alertBuf), 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
+            memset(alertBuf, 0, sizeof(alertBuf));
+        }
+        else if (strcmp(commandBuf, "quit") == 0)
+        {
+            sprintf(alertBuf, "\nServer Closed");
+            for (int i = 0; i < userCount; i++){
+                sendto(sock, alertBuf, strlen(alertBuf), 0, (struct sockaddr *)&userList[i].addr, sizeof(userList[i].addr));
+            }    
+            printf("Server Closed\n");
+            close(sock);
+            return 0;
+        }
+        else
+        {
+            // 일반 메시지 처리: 다른 사용자에게 전달
+            for (int i = 0; i < userCount; i++)
+            {
+                if (strcmp(userList[i].nickName, nickNameBuf) != 0) // 발신자에게는 echo하지 않음
+                {
+                    sendto(sock, mainBuf, recv, 0, (struct sockaddr *)&userList[i].addr, sizeof(userList[i].addr));
+                }
             }
         }
     }
@@ -206,4 +230,3 @@ void createUser(char user[], struct sockaddr_in addr)
 // ./server
 
 // 통계 기능을 위한 서버 시작 시, 시간 측정
-//
