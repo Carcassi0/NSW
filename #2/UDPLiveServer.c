@@ -2,40 +2,40 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
-#include <unistd.h>     // for close()
-#include <arpa/inet.h>  // for inet_addr() and htons()
-#include <sys/socket.h> // for socket functions
-#include <netinet/in.h> // for sockaddr_in
-#include <time.h>       // for time stat
+#include <unistd.h>    
+#include <arpa/inet.h>  
+#include <sys/socket.h> 
+#include <netinet/in.h> 
+#include <time.h>       
 
 #define BUFSIZE 512
 #define MAX_USERS 100
 
 struct ThreadArgs
 {
-    int clientSock;                // Socket descriptor for client
-    struct sockaddr_in clientaddr; // Client address
+    int clientSock;                
+    struct sockaddr_in clientaddr; 
 };
 
 struct userData
 {
-    int avail;               // Availability flag
-    char nickName[20];       // User nickname
-    struct sockaddr_in addr; // User address
+    int avail;               
+    char nickName[20];       
+    struct sockaddr_in addr;
 };
 
 char mainBuf[BUFSIZE];
 char nickNameBuf[BUFSIZE];
 char commandBuf[5];
 char alertBuf[BUFSIZE];
-int offset = 0; // 문자열 이어 쓰기를 위한 변수
+int offset = 0; 
 struct userData userList[MAX_USERS];
 int userCount = 0;
 
 // 통계 변수
 int messageNumber = 0;
 
-void *ThreadMain(void *arg); // Main program of a thread
+void *ThreadMain(void *arg); 
 void *recvMessage(void *arg);
 // void *statMessage(void *arg);
 void err_quit(const char *msg);
