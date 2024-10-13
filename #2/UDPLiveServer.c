@@ -31,9 +31,10 @@ char alertBuf[BUFSIZE];
 int offset = 0; 
 struct userData userList[MAX_USERS];
 int userCount = 0;
+int serverRunning = 0;
 
 // 통계 변수
-int messageNumber = 0;
+int messageNumber = 1;
 
 void *ThreadMain(void *arg); 
 void *recvMessage(void *arg);
@@ -47,7 +48,7 @@ double cpu_time_used;
 int main(int argc, char *argv[])
 {
     int retval;
-    int listenSock = socket(PF_INET, SOCK_DGRAM, 0);
+    int listenSock = socket(AF_INET, SOCK_DGRAM, 0);
 
     start = clock();
 
@@ -69,9 +70,11 @@ int main(int argc, char *argv[])
 
     printf("Server is running on port 9000...\n");
 
-    for (;;)
+    while (serverRunning)
     {
+        // 유저 구조체 변수 하나 늘림
         struct ThreadArgs *threadArgs = (struct ThreadArgs *)malloc(sizeof(struct ThreadArgs));
+        // 구조체 변수의 주소 변수의 크기를 클라이언트 주소 정보 크기로 설정
         socklen_t addrlen = sizeof(threadArgs->clientaddr);
         threadArgs->clientSock = listenSock;
 
@@ -100,16 +103,6 @@ void *ThreadMain(void *arg)
     // Extract socket and client address from argument
     struct ThreadArgs *threadArgs = (struct ThreadArgs *)arg;
     int sock = threadArgs->clientSock;
-
-    // 메인 스레드 아래에 릴레이 스레드와 통계 스레드 생성
-    // pthread_t relayThread;
-    // // pthread_t statThread;
-
-    // pthread_create(&relayThread, NULL, recvMessage, threadArgs);
-    // // pthread_create(&statThread, NULL, statMessage, threadArgs);
-
-    // pthread_detach(relayThread);
-    // // pthread_detach(statThread);
 
     recvMessage(threadArgs);
 
@@ -181,8 +174,8 @@ void *recvMessage(void *arg)
                 sendto(sock, alertBuf, strlen(alertBuf), 0, (struct sockaddr *)&userList[i].addr, sizeof(userList[i].addr));
             }    
             printf("Server Closed\n");
-            close(sock);
-            return 0;
+            serverRunning = 0;
+            return NULL;
         }
         else
         {
@@ -192,6 +185,9 @@ void *recvMessage(void *arg)
                 if (strcmp(userList[i].nickName, nickNameBuf) != 0) // 발신자에게는 echo하지 않음
                 {
                     sendto(sock, mainBuf, recv, 0, (struct sockaddr *)&userList[i].addr, sizeof(userList[i].addr));
+                    memset(alertBuf, 0, sizeof(alertBuf)); 
+                    memset(mainBuf, 0, sizeof(mainBuf));
+
                 }
             }
         }

@@ -12,7 +12,6 @@
 char buf[BUFSIZE];
 char nickName[BUFSIZE];
 char sendBuf[BUFSIZE];
-struct sockaddr_in peeraddr;
 struct sockaddr_in serveraddr;
 int server_port = 0;
 char server_ip[INET_ADDRSTRLEN];
@@ -22,7 +21,7 @@ void *sendMessage(void *arg);
 void *rcvMessage(void *arg);
 
 struct threadArgs {
-    int clntSock; // Socket descriptor for client
+    int clientSock; // Socket descriptor for client
     struct sockaddr_in serveraddr;
 };
 
@@ -49,13 +48,16 @@ int main(int argc, char *argv[]) {
 
 
     // Create client socket
-    int sock = socket(AF_INET, SOCK_DGRAM, 0);
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
     if (sock < 0) {
         err_quit("socket()");
     }
 
+    // 서버에 connect 요청
+    connect(sock, (struct sockaddr *)&serveraddr, sizeof(serveraddr));
+
     struct threadArgs *threadArgs = (struct threadArgs *)malloc(sizeof(struct threadArgs));
-    threadArgs->clntSock = sock; // 클라이언트 소켓 저장
+    threadArgs->clientSock = sock; // 클라이언트 소켓 저장
     threadArgs->serveraddr = serveraddr;
 
     // 닉네임 입력
@@ -86,7 +88,7 @@ int main(int argc, char *argv[]) {
 
 void *sendMessage(void *arg) {
     struct threadArgs *threadArgs = (struct threadArgs *)arg;
-    int sock = threadArgs->clntSock; // 클라이언트 소켓 가져오기
+    int sock = threadArgs->clientSock; // 클라이언트 소켓 가져오기
     
 
     while (1) {
@@ -107,7 +109,7 @@ void *sendMessage(void *arg) {
             sprintf(sendBuf, "[%s] %s", nickName, buf);
 
             // 클라이언트 메뉴 선택 전송: info, stat, quit
-            int send = sendto(sock, sendBuf, strlen(sendBuf), 0, (struct sockaddr *)&threadArgs->serveraddr, sizeof(threadArgs->serveraddr));
+            send(sock, sendBuf, strlen(sendBuf), 0);
             continue;
         }
 
@@ -117,9 +119,9 @@ void *sendMessage(void *arg) {
 
         // 메시지 전송
         sprintf(sendBuf, "[%s] %s", nickName, buf);
-        int send = sendto(sock, sendBuf, strlen(sendBuf), 0, (struct sockaddr *)&threadArgs->serveraddr, sizeof(threadArgs->serveraddr));
+        send(sock, sendBuf, strlen(sendBuf), 0);
         if (send < 0) {
-            perror("sendto()");
+            perror("send()");
         }
     }
     return (NULL);
@@ -127,18 +129,19 @@ void *sendMessage(void *arg) {
 
 void *rcvMessage(void *arg) {
     struct threadArgs *threadArgs = (struct threadArgs *)arg;
-    int sock = threadArgs->clntSock; // 클라이언트 소켓 가져오기
+    int sock = threadArgs->clientSock; // 클라이언트 소켓 가져오기
+    int recv;
+    char buf[BUFSIZE];
 
-    while (1) {
-        char buf[BUFSIZE];
-        socklen_t addrlen = sizeof(peeraddr);
-        int recv = recvfrom(sock, buf, BUFSIZE, 0, (struct sockaddr *)&peeraddr, &addrlen);
+    while (1) {        
+        recv = read(sock, buf, sizeof(buf));
         if (recv < 0) {
             perror("recvfrom()");
             continue;
         }
         buf[recv] = '\0';
         printf("\n%s\n", buf);
+        memset(buf, 0, sizeof(buf));
     }
 }
 
@@ -149,5 +152,5 @@ void err_quit(const char *msg) {
 
 
 
-// gcc -o client UDPLiveClient.c
-// ./client
+// gcc -o tcpclient TCPLiveClient.c
+// ./tcpclient
