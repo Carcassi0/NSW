@@ -42,15 +42,15 @@ void *recvMessage(void *arg);
 void err_quit(const char *msg);
 int sameUser(char user[]);
 void createUser(char user[], struct sockaddr_in addr);
-clock_t start, end;
-double cpu_time_used;
+time_t start, end;
+double programTime;
 
 int main(int argc, char *argv[])
 {
     int retval;
     int listenSock = socket(AF_INET, SOCK_DGRAM, 0);
 
-    start = clock();
+    start = time(NULL);
 
     if (listenSock < 0)
     {
@@ -161,9 +161,10 @@ void *recvMessage(void *arg)
         }
         else if (strcmp(commandBuf, "stat") == 0)
         {
-            end = clock();
-            cpu_time_used = messageNumber / (((double)(end - start)) / CLOCKS_PER_SEC * 60);
-            sprintf(alertBuf, "1분당 평균 메시지 수: %f", cpu_time_used);
+            end = time(NULL);
+            double passedTime = difftime(end, start);
+            programTime = messageNumber / (passedTime/60.0);
+            sprintf(alertBuf, "1분당 평균 메시지 수: %f", programTime);
             sendto(sock, alertBuf, strlen(alertBuf), 0, (struct sockaddr *)&clientaddr, sizeof(clientaddr));
             memset(alertBuf, 0, sizeof(alertBuf));
         }
