@@ -31,7 +31,7 @@ char alertBuf[BUFSIZE];
 int offset = 0; 
 struct userData userList[MAX_USERS];
 int userCount = 0;
-int serverRunning = 0;
+int serverRunning = 1;
 
 // 통계 변수
 int messageNumber = 1;

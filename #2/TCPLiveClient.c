@@ -14,6 +14,7 @@ char nickName[BUFSIZE];
 char sendBuf[BUFSIZE];
 struct sockaddr_in serveraddr;
 int server_port = 0;
+int running = 1;
 char server_ip[INET_ADDRSTRLEN];
 
 void err_quit(const char *msg);
@@ -77,11 +78,11 @@ int main(int argc, char *argv[]) {
     pthread_detach(recvThread);
 
     // 메인 스레드는 종료되지 않도록 무한 대기
-    while (1) {
-        sleep(1); // CPU 사용을 줄이기 위한 대기
+    while (running) {
+        sleep(1); 
     }
 
-    close(sock); // 이 부분은 실행되지 않지만, 프로그램이 끝나면 소켓을 닫아야 합니다.
+    close(sock); 
     free(threadArgs); // 메모리 해제
     return 0;
 }
@@ -91,7 +92,7 @@ void *sendMessage(void *arg) {
     int sock = threadArgs->clientSock; // 클라이언트 소켓 가져오기
     
 
-    while (1) {
+    while (running) {
         // 메시지 입력
         printf("\n[enter message] ");
 
@@ -110,6 +111,9 @@ void *sendMessage(void *arg) {
 
             // 클라이언트 메뉴 선택 전송: info, stat, quit
             send(sock, sendBuf, strlen(sendBuf), 0);
+            if(strcmp(buf, "quit")==0){
+                return 0;
+            }
             continue;
         }
 
@@ -136,7 +140,7 @@ void *rcvMessage(void *arg) {
     while (1) {        
         recv = read(sock, buf, sizeof(buf));
         if (recv < 0) {
-            perror("recvfrom()");
+            perror("read()");
             continue;
         }
         buf[recv] = '\0';

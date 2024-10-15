@@ -69,7 +69,6 @@ int main(int argc, char *argv[])
 
     bind(serverSock, (struct sockaddr *)&serveraddr, sizeof(serveraddr));
 
-
     printf("Waiting for clients...\n");
 
     while (serverRunning)
@@ -87,19 +86,17 @@ int main(int argc, char *argv[])
 
         sock = accept(serverSock, (struct sockaddr *)&threadArgs->clientaddr, &addrlen);
 
+        if (!serverRunning)
+        {
+            free(threadArgs);
+            break;
+        }
+
         threadArgs->clientSock = sock;
-        // addSock = malloc(1);
-        // *addSock = clientSock;
 
         pthread_create(&mainThread, NULL, ThreadMain, threadArgs);
-    } 
+    }
 
-    sprintf(alertBuf, "\nServer Closed");
-
-    // for (int i = 0; i < userCount; i++)
-    // {
-    //     sendto(sock, alertBuf, strlen(alertBuf), 0, (struct sockaddr *)&userList[i].addr, sizeof(userList[i].addr));
-    // }
     printf("Server Closed\n");
     close(serverSock);
     return 0;
@@ -209,10 +206,32 @@ void *userThread(void *arg)
         {
             end = time(NULL);
             double passedTime = difftime(end, start);
-            programTime = messageNumber / (passedTime/60.0);
+            programTime = messageNumber / (passedTime / 60.0);
             sprintf(alertBuf, "1분당 평균 메시지 수: %f", programTime);
             send(sock, alertBuf, strlen(alertBuf), 0);
             memset(alertBuf, 0, sizeof(alertBuf));
+        }
+        else if (strcmp(commandBuf, "closeserver") == 0)
+        {
+            for (int i = 0; i < totalUserCount; i++)
+            {
+                if (strcmp(nickNameBuf, userList[i].nickName) == 0)
+                {
+                    userList[i].isOut = 1;
+                }
+            }
+
+            serverRunning = 0;
+            close(sock);
+            for (int i = 0; i < totalUserCount; i++)
+            {
+                if (userList[i].isOut != 1)
+                {
+                    close(userList[i].clientSockFd);
+                    userList[i].isOut = 1;
+                }
+            }
+            return NULL;
         }
         else if (strcmp(commandBuf, "quit") == 0)
         {
@@ -234,6 +253,7 @@ void *userThread(void *arg)
             }
             printf("\nUser \'%s\' disconnected from channel ", nickNameBuf);
             memset(alertBuf, 0, sizeof(alertBuf));
+            close(sock);
             return NULL;
         }
         else
@@ -250,7 +270,10 @@ void *userThread(void *arg)
             memset(mainBuf, 0, sizeof(mainBuf));
         }
     }
+    close(sock);
+    return (NULL);
 }
+
 
 // gcc -o tcpserver TCPLiveServer.c
 // ./tcpserver
