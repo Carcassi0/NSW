@@ -16,6 +16,17 @@ void err_quit(const char *msg)
     exit(-1);    // 프로그램 종료
 }
 
+void stringGenerator(char *str, int length) {
+    const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    int charset_size = sizeof(charset) - 1; // 마지막에 '\0'이 있으므로 -1
+
+    for (int i = 0; i < length; i++) {
+        int key = rand() % charset_size;
+        str[i] = charset[key];
+    }
+    str[length] = '\0'; // 문자열의 끝에 NULL 문자 추가
+}
+
 int main()
 {
     int retval;
@@ -65,7 +76,7 @@ int main()
     struct timeval timeout;
 
     // 타임아웃 설정
-    timeout.tv_sec = 10;
+    timeout.tv_sec = 1;
     timeout.tv_usec = 0;
 
     // 타임아웃을 위한 소켓 옵션 설정
@@ -73,35 +84,25 @@ int main()
 
     while (1)
     {
+        // 버퍼 초기화
+        memset(buf, 0, sizeof(buf));
+        memset(sendBuf, 0, sizeof(sendBuf));
 
-        // 메시지 입력
-        printf("\n[enter message] ");
-        if (fgets(buf, BUFSIZE + 1, stdin) == NULL)
-            break;
+        // // 메시지 입력
+        // printf("\n[enter message] ");
+        // if (fgets(buf, BUFSIZE + 1, stdin) == NULL)
+        //     break;
 
-        // 메시지 가공
-        len = strlen(buf);
-        if (buf[len - 1] == '\n')
-            buf[len - 1] = '\0';
-        if (strlen(buf) == 0)
-            break;
+        // // 메시지 가공
+        // len = strlen(buf);
+        // if (buf[len - 1] == '\n')
+        //     buf[len - 1] = '\0';
+        // if (strlen(buf) == 0)
+        //     break;
 
-        if (strcmp(buf, "quit") == 0 || strcmp(buf, "QUIT") == 0)
-        { // 종료 커맨드
-            // 타이머 시작(10초) 추가 + 타임 아웃 매커니즘 추가
-            sequence += (uint16_t)strlen(buf); // 만약 타임 아웃으로 재전송 하면 실행되지 않아야 함.
+        stringGenerator(buf, 100);
 
-            memcpy(sendBuf, &sequence, sizeof(sequence));
-            memcpy(sendBuf + sizeof(sequence), buf, strlen(buf) + 1);
-
-            // 전송
-            retval = sendto(sock, sendBuf, sizeof(command) + strlen(buf), 0,
-                            (struct sockaddr *)&serveraddr, sizeof(serveraddr));
-
-            break;
-        }
-
-        sequence += (uint16_t)strlen(buf); // 만약 타임 아웃으로 재전송 하면 실행되지 않아야 함.
+        sequence += (uint16_t)strlen(buf); 
 
         memcpy(sendBuf, &sequence, sizeof(sequence));
         memcpy(sendBuf + sizeof(sequence), buf, strlen(buf) + 1);
@@ -129,10 +130,10 @@ int main()
             while (1)
             {
                 // 타임아웃 발생
-                if (retval = sendto(sock, sendBuf, sizeof(command) + strlen(buf), 0,
+                if ( sendto(sock, sendBuf, sizeof(command) + strlen(buf), 0,
                                     (struct sockaddr *)&serveraddr, sizeof(serveraddr)) > 0)
                 {
-                    printf("Retransmit due to timeout!!!");
+                    printf("Retransmit due to timeout!!!"); // 성공적으로 발신했을 때
                 }
                 retval = recvfrom(sock, buf, BUFSIZE, 0, (struct sockaddr *)&peeraddr, &addrlen);
 
@@ -149,6 +150,11 @@ int main()
         // 수신된 메시지 출력
         buf[retval] = '\0';
         printf("[Received message] %s\n", buf);
+
+        if (strcmp(buf, "quit") == 0 || strcmp(buf, "QUIT") == 0)
+        {
+            break;
+        }
     }
 
     // 소켓 종료
@@ -158,6 +164,7 @@ int main()
     return 0;
 }
 
+
 // Test
-// gcc -o client UDPClient.c
+// gcc -o client ARQClient.c
 // ./client
