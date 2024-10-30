@@ -45,11 +45,12 @@ int main(int argc, char *argv[])
     char alertBuf[BUFSIZE];
     char buf[BUFSIZE + 1];
     uint16_t sequence = 0;
+    uint16_t recvSequence = 0;
     int len;
     int n1 = 0;
     int n2 = 0; // 재전송한 메시지 총 수
-    int n3 = 0; 
-    int ratio = 0; // n2/n3  <= double 형으로 바꿔야 할 수도..?
+    int n3 = 0;
+    int ratio = 0;           // n2/n3  <= double 형으로 바꿔야 할 수도..?
     double defalutNum = 0.5; // 값 변경하면서 보고서 작성(최소 3개)
 
     while (1)
@@ -71,12 +72,14 @@ int main(int argc, char *argv[])
 
         // 커맨드와 메시지를 분리
         // 시퀀스 넘버 추출
-        memcpy(&sequence, buf, sizeof(uint16_t));
+        memcpy(&recvSequence, buf, sizeof(uint16_t));
+
+        recvSequence = ntohs(recvSequence);
 
         // 재전송된 메시지의 경우 sequence 넘버 증가시키지 않음
-        if (sequence != ntohs(sequence))
+        if (sequence != recvSequence)
         {
-            sequence += ntohs(sequence);
+            sequence += recvSequence;
         }
 
         // 메시지 추출
@@ -97,26 +100,25 @@ int main(int argc, char *argv[])
 
         if (random_num < defalutNum)
         {
-            if (strcmp(message, "quit") == 0 || strcmp(message, "QUIT"))
+            if (strcmp(message, "quit") == 0 || strcmp(message, "QUIT") == 0)
             {
                 if (sendto(sock, buf, retval, 0, (struct sockaddr *)&clientaddr, addrlen) > 0)
                 {
                     printf("Client(%s:%d)종료\n", inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
-                    printf("통계정보:p=%f,N1=%d,N2=%d,N3=%d,R=%d\n",defalutNum, n1, n2, n1+n2, n2%n3);
+                    printf("통계정보:p=%f,N1=%d,N2=%d,N3=%d,R=%d\n", defalutNum, n1, n2, n1 + n2, n2 % n3);
                     break;
                 }
             }
             // 만약 로스가 나지 않으면 그대로  echo
-            if (sendto(sock, buf, retval, 0, (struct sockaddr *)&clientaddr, addrlen) > 0)
-            {
-                printf("메시지 echo 완료");
-            }
+            sendto(sock, buf, retval, 0, (struct sockaddr *)&clientaddr, addrlen);
+
+            printf("메시지 echo 완료\n");
         }
         else
         {
-            printf("메시지 손실 처리");
+            printf("메시지 손실 처리\n");
+            n2++;
             continue;
-            ++n2;
         }
 
         // 에러 처리
@@ -132,7 +134,6 @@ int main(int argc, char *argv[])
 
     return 0;
 }
-
 
 // Test
 // gcc -o server ARQServer.c

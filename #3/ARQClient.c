@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 #include <string.h>
 #include <stdint.h>     // uint16_t 사용
 #include <unistd.h>     // for close()
@@ -16,11 +17,13 @@ void err_quit(const char *msg)
     exit(-1);    // 프로그램 종료
 }
 
-void stringGenerator(char *str, int length) {
+void stringGenerator(char *str, int length)
+{
     const char charset[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
     int charset_size = sizeof(charset) - 1; // 마지막에 '\0'이 있으므로 -1
 
-    for (int i = 0; i < length; i++) {
+    for (int i = 0; i < length; i++)
+    {
         int key = rand() % charset_size;
         str[i] = charset[key];
     }
@@ -74,6 +77,9 @@ int main()
     uint16_t command;      // for user command
     uint16_t sequence = 0; // for sequence number
     struct timeval timeout;
+    int length = 0;
+    int quentity = 0;
+    srand(time(NULL));
 
     // 타임아웃 설정
     timeout.tv_sec = 1;
@@ -88,53 +94,81 @@ int main()
         memset(buf, 0, sizeof(buf));
         memset(sendBuf, 0, sizeof(sendBuf));
 
-        // // 메시지 입력
-        // printf("\n[enter message] ");
-        // if (fgets(buf, BUFSIZE + 1, stdin) == NULL)
-        //     break;
+        printf("Enter string quantity\n");
+        scanf("%d", &quentity);
 
-        // // 메시지 가공
-        // len = strlen(buf);
-        // if (buf[len - 1] == '\n')
-        //     buf[len - 1] = '\0';
-        // if (strlen(buf) == 0)
-        //     break;
 
-        stringGenerator(buf, 100);
+        length = rand() % 30;
 
-        sequence += (uint16_t)strlen(buf); 
-
-        memcpy(sendBuf, &sequence, sizeof(sequence));
-        memcpy(sendBuf + sizeof(sequence), buf, strlen(buf) + 1);
-
-        // 전송
-        retval = sendto(sock, sendBuf, sizeof(command) + strlen(buf), 0,
-                        (struct sockaddr *)&serveraddr, sizeof(serveraddr));
-
-        // 에러 확인
-        if (retval < 0)
+        for (int i = 0; i < quentity; i++)
         {
-            perror("sendto()");
-            continue;
+            stringGenerator(buf, length);
+            sequence += (uint16_t)strlen(buf);
+
+            memcpy(sendBuf, &sequence, sizeof(sequence));
+            memcpy(sendBuf + sizeof(sequence), buf, strlen(buf) + 1);
+
+            // 전송
+            retval = sendto(sock, sendBuf, sizeof(command) + strlen(buf), 0,
+                            (struct sockaddr *)&serveraddr, sizeof(serveraddr));
+
+            // 에러 확인
+            if (retval < 0)
+            {
+                perror("sendto()");
+                continue;
+            }
+
+            // 전송 후 데이터 수신 위해 버퍼 초기화
+            memset(buf, 0, sizeof(buf));
+
+            // 데이터 수신
+            addrlen = sizeof(peeraddr);
+            retval = recvfrom(sock, buf, BUFSIZE, 0, (struct sockaddr *)&peeraddr, &addrlen);
+
+            if (retval < 0)
+            {
+                while (1)
+                {
+                    // 타임아웃 발생
+                    sendto(sock, sendBuf, sizeof(command) + strlen(buf), 0,
+                           (struct sockaddr *)&serveraddr, sizeof(serveraddr));
+
+                    printf("Retransmit due to timeout!!!"); // 성공적으로 발신했을 때
+
+                    retval = recvfrom(sock, buf, BUFSIZE, 0, (struct sockaddr *)&peeraddr, &addrlen);
+
+                    if (retval > 0)
+                    {
+                        break; // 만약 정상 수신했다면 루프 빠져나감
+                    }
+                    else
+                    {
+                        continue;
+                    }
+                }
+            }
+            // 수신된 메시지 출력
+            buf[retval] = '\0';
+            printf("[Received message] %s\n", buf);
         }
 
-        // 전송 후 데이터 수신 위해 버퍼 초기화
         memset(buf, 0, sizeof(buf));
 
-        // 데이터 수신
-        addrlen = sizeof(peeraddr);
-        retval = recvfrom(sock, buf, BUFSIZE, 0, (struct sockaddr *)&peeraddr, &addrlen);
+        printf("Enter \"QUIT\" to exit");
 
-        if (retval < 0)
+        fgets(buf, sizeof(buf), stdin);
+
+        buf[strcspn(buf, "\n")] = 0;
+
+        if (strcmp(buf, "quit") == 0 || strcmp(buf, "QUIT") == 0)
         {
             while (1)
             {
                 // 타임아웃 발생
-                if ( sendto(sock, sendBuf, sizeof(command) + strlen(buf), 0,
-                                    (struct sockaddr *)&serveraddr, sizeof(serveraddr)) > 0)
-                {
-                    printf("Retransmit due to timeout!!!"); // 성공적으로 발신했을 때
-                }
+                sendto(sock, sendBuf, sizeof(command) + strlen(buf), 0,
+                       (struct sockaddr *)&serveraddr, sizeof(serveraddr));
+
                 retval = recvfrom(sock, buf, BUFSIZE, 0, (struct sockaddr *)&peeraddr, &addrlen);
 
                 if (retval > 0)
@@ -147,14 +181,8 @@ int main()
                 }
             }
         }
-        // 수신된 메시지 출력
-        buf[retval] = '\0';
-        printf("[Received message] %s\n", buf);
 
-        if (strcmp(buf, "quit") == 0 || strcmp(buf, "QUIT") == 0)
-        {
-            break;
-        }
+        break;
     }
 
     // 소켓 종료
@@ -163,7 +191,6 @@ int main()
 
     return 0;
 }
-
 
 // Test
 // gcc -o client ARQClient.c
