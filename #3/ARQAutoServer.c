@@ -49,9 +49,11 @@ int main(int argc, char *argv[])
     int len;
     int n1 = 0;
     int n2 = 0; // 재전송한 메시지 총 수
-    int ratio = 0;
+    int n3 = 0;
+    int ratio = 0;           // n2/n3  <= double 형으로 바꿔야 할 수도..?
     double defalutNum = 0.5; // 값 변경하면서 보고서 작성(최소 3개)
     srand(time(NULL));
+    int flag = 0;
 
     while (1)
     {
@@ -74,7 +76,13 @@ int main(int argc, char *argv[])
         memcpy(&recvSequence, buf, sizeof(uint16_t));
 
         // 재전송된 메시지의 경우 sequence 넘버 증가시키지 않음
-        sequence = (uint16_t)ntohs(recvSequence);
+        // sequence != ntohs(recvSequence);
+        if (flag != 1)
+        {
+            size_t messageLength = retval - sizeof(uint16_t) - 1; // 메시지의 길이
+            sequence += (uint16_t)messageLength;
+            // printf("Received Sequence: %hu, New Sequence: %hu\n", ntohs(recvSequence), sequence);
+        }
 
         // 메시지 추출
         char message[BUFSIZE - sizeof(uint16_t) + 1];
@@ -92,23 +100,24 @@ int main(int argc, char *argv[])
         double random_num = (double)rand() / RAND_MAX;
 
         // 로스가 발생하지 않으면
-        if (random_num <= defalutNum)
+        if (random_num < defalutNum)
         {
-
+            flag = 0;
             if (strcmp(message, "quit") == 0 || strcmp(message, "QUIT") == 0) // 종료 커맨드일 때
             {
                 if (sendto(sock, message, sizeof(message) + 1, 0, (struct sockaddr *)&clientaddr, addrlen) > 0)
                 {
-                    printf("메시지 echo 완료\n");
+                    printf("[Echo Message] %s\n", message); // 디버그
 
                     printf("Client(%s:%d)종료\n", inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
-                    printf("통계정보:p=%f,N1=%d,N2=%d,N3=%d,R=%f\n", defalutNum, n1, n2, n1 + n2, n2 / (double)(n1 + n2));
+                    printf("통계정보:p=%f,N1=%d,N2=%d,N3=%d,R=%d\n", defalutNum, n1, n2, n1 + n2, (double)(n2 / n3));
                     break;
                 }
                 else
                 {
                     printf("메시지 손실 처리\n");
-                    ++n2;
+                    flag = 1;
+                    n2++;
                     continue;
                 }
             }
@@ -116,13 +125,25 @@ int main(int argc, char *argv[])
             n1++;
             sendto(sock, message, sizeof(message) + 1, 0, (struct sockaddr *)&clientaddr, addrlen);
 
+            printf("[Echo Message] %s\n", message); // 디버그
             printf("메시지 echo 완료\n");
+            // if (strcmp(message, "quit") == 0 || strcmp(message, "QUIT") == 0)
+            // {
+            //     if (sendto(sock, message, sizeof(message) + 1, 0, (struct sockaddr *)&clientaddr, addrlen) > 0)
+            //     {
+            //         printf("[Echo Message] %s\n", message); // 디버그
+
+            //         printf("Client(%s:%d)종료\n", inet_ntoa(clientaddr.sin_addr), ntohs(clientaddr.sin_port));
+            //         printf("통계정보:p=%lf,N1=%d,N2=%d,N3=%d,R=%lf\n", defalutNum, n1, n2, n1 + n2, (double)(n2 / n3));
+            //         break;
+            //     }
+            // }
         }
         else // 로스가 발생하면
         {
             printf("메시지 손실 처리\n");
-
-            ++n2;
+            flag = 1;
+            n2++;
             continue;
         }
 
